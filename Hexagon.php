@@ -27,17 +27,14 @@ $wiki = new Hexagon\MediaWiki($http, $api);
 // login
 $wiki->login($user, $pass);
 
-$page = $wiki->getPage('Sample');
+while(true) {
+    $cmd = Hexagon\Console::prompt($wiki->getBashString());
 
-// loads page and returns wikitext
-$content = $page->getContent();
+    if($cmd == "exit" || $cmd == "logout") {
+        break;
+    }
 
-// replace some text, do your task here
-$content = str_replace("Helo World.", "Hello World!", $content);
-
-// set wikitext as text of this page
-$page->setContent($content);
-
-// save the page with a summary ("Bot: " will automatically prepended) as a normal bot edit (not minor)
-// TODO: options as a assoc array
-$page->save("your summary goes here", false, true);
+    if(file_exists(__DIR__ . "/" . $cmd)) {
+        include __DIR__ . "/" . $cmd;
+    }
+}

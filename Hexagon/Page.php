@@ -59,13 +59,21 @@ class Page {
     }
 
     // https://www.mediawiki.org/wiki/API:Edit
-    public function save($message, $minor = false, $bot = false, $checkConflict = false) {
+    public function save($message, $options) {
+        $defaultOptions = [
+            'bot' => false,
+            'minor' => false,
+            'checkConflict' => false,
+        ];
+
+        $options = array_merge($defaultOptions, $options);
+
         if(strcasecmp("Bot: ", substr($message, 0, 5)) !== 0) {
             $message = "Bot: $message";
         }
 
-        $minor  = $minor    ? 'minor'   : 'notminor';
-        $bot    = $bot      ? 'bot'     : 'notbot';
+        $minor  = $options['minor'] ? 'minor' : 'notminor';
+        $bot    = $options['bot']   ? 'bot'   : 'notbot';
 
         $data = [
             'action'    => 'edit',
@@ -78,7 +86,7 @@ class Page {
             'token'     => $this->wiki->getToken('edit')
         ];
 
-        if($checkConflict) {
+        if($options['checkConflict']) {
             $data['basetimestamp'] = $this->timestamp;
         }
 

@@ -16,7 +16,7 @@ class MediaWiki {
     }
 
     public function get($query) {
-        $request = new Request;
+        $request = new Artax\Request;
         $request->setMethod('GET');
         $request->setUri($this->url . "?format=php&" . $query);
 
@@ -30,13 +30,13 @@ class MediaWiki {
     }
 
     public function post($data) {
-        $body = new FormBody;
+        $body = new Artax\FormBody;
 
         foreach($data as $key => $value) {
             $body->addField($key, urlencode($value));
         }
 
-        $request = new Request;
+        $request = new Artax\Request;
         $request->setMethod('POST');
         $request->setUri($this->url . "?format=php");
         $request->setBody($body);
