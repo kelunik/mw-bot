@@ -1,8 +1,8 @@
 <?php
 
-$listDoubleRedirects = function($offset = "") {
-    global $wiki, $listDoubleRedirects;
-
+function listRedirects($offset = "") {
+	global $wiki;
+	
     $limit = $wiki->getUser()->hasRight('bot') ? 5000 : 500;
     $q = "action=query&list=querypage&qppage=DoubleRedirects&qplimit=$limit";
 
@@ -10,24 +10,23 @@ $listDoubleRedirects = function($offset = "") {
         $q .= "&qpoffset=".$offset;
     }
 
-    $response = $wiki->get($q);
+    $response = $wiki->request('GET', $q);
 
     $articles = $response['query']['querypage']['results'];
 
     if(isset($response['query-continue'])) {
-        $articles = array_merge($articles, $listDoubleRedirects($response['query-continue']['querypage']['qpoffset']));
+        $articles = array_merge($articles, listRedirects($response['query-continue']['querypage']['qpoffset']));
     }
 
     return $articles;
 };
 
-$pages = $listDoubleRedirects();
+$pages = listRedirects();
 
 foreach($pages as $page) {
-    $wikiPage = $wiki->getPage($page['title']);
+    $wikiPage = $wiki->get($page['title']);
     $wikiPage->setContent('#REDIRECT [[' . $page['databaseResult']['tc'] . ']]');
-    $wikiPage->save('Doppelte Weiterleitung korrigiert.', [
-        'bot' => true,
-        'minor' => true
+    $wikiPage->save(null, [
+        'bot' => true
     ]);
 }

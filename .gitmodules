@@ -1,6 +1,3 @@
-[submodule "vendor/Auryn"]
-path = vendor/Auryn
-url = https://github.com/rdlowrey/Auryn.git
-[submodule "vendor/Artax"]
-path = vendor/Artax
+[submodule "lib/Artax"]
+path = lib/Artax
 url = https://github.com/rdlowrey/Artax.git

@@ -1,0 +1,58 @@
+#!/usr/bin/php
+<?php
+
+require_once __DIR__ . "/functions.php";
+require_once __DIR__ . "/autoload.php";
+
+$config = parse_ini_file('mwbot.ini', true);
+
+if(!checkConfig($config)) {
+print <<<MESSAGE
+#
+#   You do not have a config file yet.
+#   Rename mwbot.sample.ini to mwbot.ini and
+#   change the settings so they suit your needs.
+#
+
+MESSAGE;
+exit;
+}
+
+if(!isset($config['user']['name'])) {
+	$config['user']['name'] = prompt('Username@'.$config['wiki']['name']);
+	unset($config['user']['pass']); // <-- require password even if it's set
+}
+
+if(!isset($config['user']['pass'])) {
+	$config['user']['pass'] = prompt('Password', true);
+}
+
+$http = new Artax\Client;
+$http->setOption('userAgentString', 'Bit v1.0 / '.$config['user']['name']);
+
+$cookieExt = new Artax\Ext\Cookies\CookieExtension;
+$cookieExt->extend($http);
+
+$wiki = new Bit\MediaWiki($http, $config['wiki']['url']);
+
+try {
+	$wiki->login($config['user']['name'], $config['user']['pass']);
+} catch(Bit\LoginException $e) {
+	print "Your login attempt wasn't successful!"."\n";
+    print $e->getMessage()."\n\n";
+    exit;
+}
+
+if(file_exists(__DIR__.'/scripts/'.$argv[1].'.php')) {
+	require_once __DIR__.'/scripts/'.$argv[1].'.php';
+} else {
+print <<<MESSAGE
+#
+#   No script has been specified or the script does not exist.
+#
+#   php mwbot scriptname
+#
+
+MESSAGE;
+exit;
+}
