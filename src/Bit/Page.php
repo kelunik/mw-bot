@@ -100,7 +100,7 @@ class Page {
         }
         
         if(!$options['ignoreExclusion'] && $this->excludes()) {
-        	print "skipping " . $this->title . " because I'm excluded.\n";
+        	print "skipping " . $this->title . " because " . $this->wiki->getUser()->getUsername() . " is excluded.\n";
         	return false;
         }
 
@@ -148,18 +148,18 @@ class Page {
     }
     
     // https://www.mediawiki.org/wiki/API:Delete
-    public static function delete($title, $wiki, $reason = null) {
+    public function delete($reason = null) {
     	$data = [
 			'action' => 'delete',
-			'title' => $title,
-			'token' => $wiki->getToken('delete')
+			'title' => $this->title,
+			'token' => $this->wiki->getToken('delete')
 		];
 		
 		if(!is_null($reason)) {
 			$data['reason'] = $reason;
 		}
 		
-    	$response = $wiki->request('POST', $data);
+    	$response = $this->wiki->request('POST', $data);
     	
     	if(isset($response['error'])) {
     		print $response['error']['code'] . ": " . $response['error']['info']."\n";
@@ -168,8 +168,88 @@ class Page {
     	
     	return true;
     }
+    
+    // https://www.mediawiki.org/wiki/API:Move
+    public function move($new_title, $reason = null, $options = []) {
+	    $defaultOptions = [
+            'movetalk' => true,
+            'movesubpages' => true,
+            'suppressredirect' => false,
+        ];
 
-    public static function exists($title, $wiki) {
-        return (new Page($title, $wiki))->getID() !== null;
+        $options = array_merge($defaultOptions, $options);
+        
+    	$data = [
+			'action' => 'move',
+			'from' => $this->title,
+			'to' => $new_title,
+			'token' => $this->wiki->getToken('delete')
+		];
+		
+		if(!is_null($reason)) {
+			$data['reason'] = $reason;
+		}
+		
+		if($options['movetalk']) {
+			$data['movetalk'] = '1';
+		}
+		
+		if($options['movesubpages']) {
+			$data['movesubpages'] = '1';
+		}
+		
+		if($options['suppressredirect']) {
+			$data['noredirect'] = '1';
+		}
+		
+    	$response = $this->wiki->request('POST', $data);
+    	
+    	if(isset($response['error'])) {
+    		print $response['error']['code'] . ": " . $response['error']['info']."\n";
+    		return false;
+    	}
+    	
+    	$this->title = $new_title;
+    	return true;
+    }
+    
+    // https://www.mediawiki.org/wiki/API:Rollback
+    public function rollback($reason = null, $markbot = false) {
+	    $response = $this->wiki->request('GET', [
+	    	'action' => 'query',
+	    	'prop' => 'revisions',
+	    	'rvtoken' => 'rollback',
+	    	'titles' => $this->title
+	    ]);
+	    
+	    $page = current($response['query']['pages']);
+	    $token = $page['revisions'][0]['rollbacktoken'];
+	    $rev_id = $page['revisions'][0]['revid'];
+	    $rev_user = $page['revisions'][0]['user'];
+	    
+	    $data = [
+	    	'action' => 'rollback',
+	    	'title' => $this->title,
+	    	'user' => $rev_user,
+	    	'summary' => $reason ?: '',
+	    	'token' => $token
+	    ];
+	    
+	    if($markbot) {
+	    	$data['markbot'] = '1';
+	    }
+	    
+	    $response = $this->wiki->request('POST', $data);
+	    
+	    if(isset($response['error'])) {
+    		print $response['error']['code'] . ": " . $response['error']['info']."\n";
+    		return false;
+    	}
+    	
+    	return true;
+    }
+
+    public function exists() {
+        return $this->getID() !== null;
     }
 } 

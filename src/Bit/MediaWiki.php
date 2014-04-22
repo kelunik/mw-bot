@@ -99,8 +99,23 @@ class MediaWiki {
     	return new Page($title, $this);
     }
     
-    // https://www.mediawiki.org/wiki/API:Delete
-    public function delete($title) {
-    	return Page::delete($title, $this);
+    public function getDoubleRedirects($offest = "") {
+		$limit = $this->getUser()->hasRight('bot') ? 5000 : 500;
+		$q = "action=query&list=querypage&qppage=DoubleRedirects&qplimit=$limit";
+
+		if(!empty($offset)) {
+		    $q .= "&qpoffset=".$offset;
+		}
+
+		$response = $this->request('GET', $q);
+		$pages = $response['query']['querypage']['results'];
+
+		if(isset($response['query-continue'])) {
+			$offset = $response['query-continue']['querypage']['qpoffset'];
+			$more = $this->getDoubleRedirects($offset);
+		    $pages = array_merge($pages, $more);
+		}
+
+		return $pages;
     }
 } 
