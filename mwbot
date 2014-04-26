@@ -1,6 +1,9 @@
 #!/usr/bin/php
 <?php
 
+error_reporting(-1);
+ini_set('xdebug.max_nesting_level', 1000);
+
 require_once __DIR__ . "/functions.php";
 require_once __DIR__ . "/autoload.php";
 
@@ -43,8 +46,11 @@ try {
     exit;
 }
 
-if(file_exists(__DIR__.'/scripts/'.$argv[1].'.php')) {
-	require_once __DIR__.'/scripts/'.$argv[1].'.php';
+$action = $argv[1];
+
+if(file_exists(__DIR__.'/scripts/'.$action.'.php')) {
+    $argv = array_slice($argv, 2);
+	require_once __DIR__.'/scripts/'.$action.'.php';
 } else {
 print <<<MESSAGE
 #

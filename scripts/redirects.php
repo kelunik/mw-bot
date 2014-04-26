@@ -1,5 +1,9 @@
 <?php
 
+if(!defined('STDIN')) {
+    die('This script is for command line usage only!');
+}
+
 $pages = $wiki->getDoubleRedirects();
 
 foreach($pages as $page) {

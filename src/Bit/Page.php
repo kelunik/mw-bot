@@ -63,48 +63,34 @@ class Page {
     }
 
     // https://www.mediawiki.org/wiki/API:Edit
-    public function save($message = null, $options = []) {
-    	if($this->content === $this->remoteContent) {
+    public function save($reason = null, $options = []) {
+    	$options = array_merge([
+            'bot' => false,
+            'minor' => false,
+            'ignoreConflict' => true,
+            'ignoreExclusion' => false,
+        ], $options);
+        
+        if($this->content === $this->remoteContent) {
     		return true; // ignore unmodified pages
     	}
     	
-        $defaultOptions = [
-            'bot' => false,
-            'minor' => true,
-            'ignoreConflict' => true,
-            'ignoreExclusion' => false,
-        ];
+		if($this->excludes() && !$options['ignoreExclusion']) {
+			print sprintf("skipping %s because of bot excluion", $this->title) . "\n";
+			return false;
+		}
 
-        $options = array_merge($defaultOptions, $options);
-
-        if(!is_null($message) && strcasecmp("Bot: ", substr($message, 0, 5)) !== 0) {
-            $message = "Bot: $message";
-        }
-
-        $minor  = $options['minor'] ? 'minor' : 'notminor';
-        $bot    = $options['bot']   ? 'bot'   : 'notbot';
-
-        $data = [
-            'action'    => 'edit',
-            'title'     => $this->title,
-            'text'      => $this->content,
-            'md5'       => md5($this->content),
-            'summary'   => $message ?: '',
-            $minor      => '1',
-            $bot        => '1',
-            'token'     => $this->wiki->getToken('edit')
-        ];
-
-        if(!$options['ignoreConflict']) {
-            $data['basetimestamp'] = $this->timestamp;
-        }
-        
-        if(!$options['ignoreExclusion'] && $this->excludes()) {
-        	print "skipping " . $this->title . " because " . $this->wiki->getUser()->getUsername() . " is excluded.\n";
-        	return false;
-        }
-
-        $response = $this->wiki->request('POST', $data);
+        $response = $this->wiki->request('POST', [
+			'action'    	=> 'edit',
+			'title'     	=> $this->title,
+			'text'      	=> $this->content,
+			'md5'       	=> md5($this->content),
+			'summary'		=> $reason,
+			'bot'			=> (bool) $options['bot'],
+			'minor' 		=> (bool) $options['minor'],
+			'basetimestamp' => $options['ignoreConflict'] ? null : $this->timestamp,
+			'token'			=> $this->wiki->getToken('edit')
+		]);
 
         if(isset($response['edit']['result']) and $response['edit']['result'] === "Success") {
         	if(isset($response['edit']['newtimestamp'])) {
@@ -131,12 +117,14 @@ class Page {
         if(is_null($user)) {
             $user = $this->wiki->getUser()->getUsername();
         }
-
-        if(preg_match('/\{\{(nobots|bots\|allow=none|bots\|deny=all|bots\|optout=all|bots\|deny=.*?'.preg_quote($user, '/').'.*?)\}\}/iS', $this->getContent())) {
+		
+		$user = preg_quote($user, '/');
+		
+        if(preg_match("/\{\{(nobots|bots\|allow=none|bots\|deny=all|bots\|optout=all|bots\|deny=.*?{$user}.*?)\}\}/iS", $this->getContent())) {
             return true;
         }
 
-        if(preg_match('/\{\{(bots\|allow=all|bots\|allow=.*?'.preg_quote($user, '/').'.*?)\}\}/iS', $this->getContent())) {
+        if(preg_match("/\{\{(bots\|allow=all|bots\|allow=.*?{$user}.*?)\}\}/iS", $this->getContent())) {
             return false;
         }
 
@@ -149,17 +137,12 @@ class Page {
     
     // https://www.mediawiki.org/wiki/API:Delete
     public function delete($reason = null) {
-    	$data = [
-			'action' => 'delete',
-			'title' => $this->title,
-			'token' => $this->wiki->getToken('delete')
-		];
-		
-		if(!is_null($reason)) {
-			$data['reason'] = $reason;
-		}
-		
-    	$response = $this->wiki->request('POST', $data);
+    	$response = $this->wiki->request('POST', [
+			'action' 	=> 'delete',
+			'title' 	=> $this->title,
+			'reason' 	=> $reason,
+			'token' 	=> $this->wiki->getToken('delete')
+		]);
     	
     	if(isset($response['error'])) {
     		print $response['error']['code'] . ": " . $response['error']['info']."\n";
@@ -171,38 +154,22 @@ class Page {
     
     // https://www.mediawiki.org/wiki/API:Move
     public function move($new_title, $reason = null, $options = []) {
-	    $defaultOptions = [
+	    $options = array_merge([
             'movetalk' => true,
             'movesubpages' => true,
             'suppressredirect' => false,
-        ];
-
-        $options = array_merge($defaultOptions, $options);
+        ], $options);
         
-    	$data = [
-			'action' => 'move',
-			'from' => $this->title,
-			'to' => $new_title,
-			'token' => $this->wiki->getToken('delete')
-		];
-		
-		if(!is_null($reason)) {
-			$data['reason'] = $reason;
-		}
-		
-		if($options['movetalk']) {
-			$data['movetalk'] = '1';
-		}
-		
-		if($options['movesubpages']) {
-			$data['movesubpages'] = '1';
-		}
-		
-		if($options['suppressredirect']) {
-			$data['noredirect'] = '1';
-		}
-		
-    	$response = $this->wiki->request('POST', $data);
+    	$response = $this->wiki->request('POST', [
+			'action' 		=> 'move',
+			'from' 			=> $this->title,
+			'to' 			=> $new_title,
+			'reason' 		=> $reason ?: '',
+			'token' 		=> $this->wiki->getToken('delete'),
+			'movetalk'		=> (bool) $options['movetalk'],
+			'movesubpages'	=> (bool) $options['movesubpages'],
+			'noredirect'	=> (bool) $options['suppressredirect']
+		]);
     	
     	if(isset($response['error'])) {
     		print $response['error']['code'] . ": " . $response['error']['info']."\n";
@@ -216,32 +183,58 @@ class Page {
     // https://www.mediawiki.org/wiki/API:Rollback
     public function rollback($reason = null, $markbot = false) {
 	    $response = $this->wiki->request('GET', [
-	    	'action' => 'query',
-	    	'prop' => 'revisions',
-	    	'rvtoken' => 'rollback',
-	    	'titles' => $this->title
+	    	'action' 	=> 'query',
+	    	'prop' 		=> 'revisions',
+	    	'rvtoken' 	=> 'rollback',
+	    	'titles' 	=> $this->title
 	    ]);
 	    
-	    $page = current($response['query']['pages']);
-	    $token = $page['revisions'][0]['rollbacktoken'];
-	    $rev_id = $page['revisions'][0]['revid'];
-	    $rev_user = $page['revisions'][0]['user'];
+	    $page 		= current($response['query']['pages']);
+	    $token 		= $page['revisions'][0]['rollbacktoken'];
+	    $rev_id 	= $page['revisions'][0]['revid'];
+	    $rev_user 	= $page['revisions'][0]['user'];
 	    
-	    $data = [
-	    	'action' => 'rollback',
-	    	'title' => $this->title,
-	    	'user' => $rev_user,
-	    	'summary' => $reason ?: '',
-	    	'token' => $token
-	    ];
-	    
-	    if($markbot) {
-	    	$data['markbot'] = '1';
-	    }
-	    
-	    $response = $this->wiki->request('POST', $data);
+	    $response = $this->wiki->request('POST', [
+	    	'action' 	=> 'rollback',
+	    	'title' 	=> $this->title,
+	    	'user' 		=> $rev_user,
+	    	'summary' 	=> $reason,
+	    	'token' 	=> $token,
+	    	'markbot' 	=> (bool) $markbot
+	    ]);
 	    
 	    if(isset($response['error'])) {
+    		print $response['error']['code'] . ": " . $response['error']['info']."\n";
+    		return false;
+    	}
+    	
+    	return true;
+    }
+    
+    // https://www.mediawiki.org/wiki/API:Protect
+    public function protect($protections, $expiry = 'infinite', array $options = []) {
+        $options = array_merge([
+            'reason' => null,
+            'cascade' => false,
+            'bot' => false,
+        ], $options);
+        
+        if(is_array($protections)) {
+	        $protections = http_build_query($protections, '', '|');
+	    }
+		
+    	$response = $this->wiki->request('POST', [
+			'action' 		=> 'protect',
+			'title' 		=> $this->title,
+			'protections' 	=> $protections,
+			'expiry' 		=> $expiry,
+			'reason' 		=> $options['reason'],
+			'bot' 			=> (int) $options['bot'],
+			'cascade' 		=> (bool) $options['cascade'],
+			'token' 		=> $this->wiki->getToken('protect')
+		]);
+    	
+    	if(isset($response['error'])) {
     		print $response['error']['code'] . ": " . $response['error']['info']."\n";
     		return false;
     	}

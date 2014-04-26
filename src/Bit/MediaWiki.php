@@ -7,8 +7,8 @@ use Artax;
 class MediaWiki {
     private $http;
     private $url;
-    private $user = null;
-    private $token = null;
+    private $user;
+    private $token;
 
     public function __construct(Artax\Client $http, $url) {
         $this->http = $http;
@@ -18,37 +18,46 @@ class MediaWiki {
     public function request($method, $data) {
 		$method = strtoupper($method);
 		
+		if(is_array($data)) {
+		    $data = array_filter($data, function($v) {
+		        if($v === null || $v === false) {
+		        	return false;
+		        }
+		        
+		        return true;
+		    });
+		    
+		    if($method === 'GET') {
+		    	$data = http_build_query($data);
+		    }
+		}
+		
 		if($method === 'GET') {
-			if(is_array($data)) {
-				$q = "";
-				
-				foreach($data as $key => $value) {
-					$q .= "&".$key."=".urlencode($value);
-				}
-				
-				$data = substr($q, 1);
-			}
-			
 			return $this->getRequest($data);
 		} else if($method === 'POST') {
 			return $this->postRequest($data);
 		} else {
-			throw new Exception("unknown method: " . $method);
+			throw new \InvalidArgumentException(
+				"Unknown request method: " . $method
+			);
 		}
     }
     
     private function getRequest($data) {
         $request = new Artax\Request;
         $request->setMethod('GET');
-        $request->setUri($this->url . "?format=php&" . $data);
+        $request->setUri("{$this->url}?format=php&{$data}");
 
         $response = $this->http->request($request);
 
-        if($response->getStatus() === 200) {
-            return unserialize($response->getBody());
-        } else {
-            return FALSE;
+        if($response->getStatus() !== 200) {
+        	$status = $response->getStatus();
+        	$reason = $response->getReason();
+        	
+        	throw new RuntimeException("Request failed: {$status} {$reason}");
         }
+        
+        return unserialize($response->getBody());
     }
 
     public function postRequest($data) {
@@ -60,16 +69,19 @@ class MediaWiki {
 
         $request = new Artax\Request;
         $request->setMethod('POST');
-        $request->setUri($this->url . "?format=php");
+        $request->setUri("{$this->url}?format=php");
         $request->setBody($body);
 		
         $response = $this->http->request($request);
 
-        if($response->getStatus() === 200) {
-            return unserialize($response->getBody());
-        } else {
-            return FALSE;
+        if($response->getStatus() !== 200) {
+        	$status = $response->getStatus();
+        	$reason = $response->getReason();
+        	
+        	throw new RuntimeException("Request failed: {$status} {$reason}");
         }
+        
+        return unserialize($response->getBody());
     }
 	
 	// https://www.mediawiki.org/wiki/API:Login
@@ -84,7 +96,8 @@ class MediaWiki {
     // https://www.mediawiki.org/wiki/API:Tokens
     public function getToken($key, $forceupdate = false) {
         if(is_null($this->token) or $forceupdate) {
-            $response = $this->request('GET', 'action=tokens&type='.urlencode('block|delete|edit|email|import|move|options|patrol|protect|unblock|watch'));
+        	$types = 'block|delete|edit|email|import|move|options|patrol|protect|unblock|watch';
+            $response = $this->request('GET', 'action=tokens&type='.urlencode($types));
 
             foreach($response['tokens'] as $k => $v) {
                 $k = substr($k, 0, -5);
@@ -97,6 +110,54 @@ class MediaWiki {
     
     public function get($title) {
     	return new Page($title, $this);
+    }
+    
+    public function uploadFile($remoteName, $localPath, array $options = []) {
+        $options = array_merge([
+            'bot' 		=> false,
+            'comment' 	=> null,
+            'text' 		=> null
+        ], $options);
+    	
+    	if(!file_exists($localPath)) {
+    		new \RuntimeException(
+    			"the file does not exist: {$localPath}"
+    		);
+    	}
+    	
+    	$body = new Artax\FormBody;
+    	
+    	// add this before the token to ensure that file is sent completely
+    	// otherwise it will result in a notoken error
+    	$body->addFileField('file', $localPath);
+		$body->addAllFields([
+    		'action' 			=> 'upload',
+    		'filename' 			=> $remoteName,
+    		'comment' 			=> $options['comment'] ?: '',
+    		'text' 				=> $options['text'] ?: '',
+    		'ignorewarnings' 	=> 1,
+    		'bot' 				=> (int) $options['bot'],
+    		'token' 			=> $this->getToken('edit')
+    	]);
+        
+        $request = (new Artax\Request)
+        		->setMethod("POST")
+        		->setUri("{$this->url}?format=php")
+        		->setBody($body);
+		
+        $response = $this->http->request($request);
+
+        if($response->getStatus() === 200) {
+            $response = unserialize($response->getBody());
+        } else {
+            return false;
+        }
+        
+        if(isset($response['upload']['result']) && $response['upload']['result'] === 'Success') {
+        	return true;
+    	}
+    	
+    	return false;
     }
     
     public function getDoubleRedirects($offest = "") {
