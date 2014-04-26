@@ -31,6 +31,8 @@ if(!isset($config['user']['pass'])) {
 }
 
 $http = new Artax\Client;
+$http->setOption('connectTimeout', -1);
+$http->setOption('transferTimeout', -1);
 $http->setOption('userAgentString', 'Bit v1.0 / '.$config['user']['name']);
 
 $cookieExt = new Artax\Ext\Cookies\CookieExtension;

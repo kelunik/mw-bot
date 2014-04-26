@@ -4,7 +4,7 @@ if(!defined('STDIN')) {
     die('This script is for command line usage only!');
 }
 
-$pages = $wiki->getDoubleRedirects();
+$pages = $wiki->listDoubleRedirects();
 
 foreach($pages as $page) {
     $p = $wiki->get($page['title']);

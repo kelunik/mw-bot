@@ -112,6 +112,49 @@ class MediaWiki {
     	return new Page($title, $this);
     }
     
+    public function block($user, $expiry = 'infinite', array $options = []) {
+    	$options = array_merge([
+    		'anononly'	=> false,
+    		'autoblock' => true,
+    		'nocreate'	=> true,
+    		'noemail'	=> false,
+    		'reason'	=> null,
+    		'bot'		=> false
+    	], $options);
+    	
+    	$response = $this->request('POST', [
+    		'action'	=> 'block',
+    		'user'		=> $user,
+    		'expiry'	=> $expiry,
+    		'reason'	=> $options['reason'],
+    		'anononly'	=> (bool) $options['anononly'],
+    		'autoblock'	=> (bool) $options['autoblock'],
+    		'nocreate'	=> (bool) $options['nocreate'],
+    		'noemail'	=> (bool) $options['noemail'],
+    		'bot'		=> (int) $options['bot'],
+    		'token'		=> $this->getToken('block')
+    	]);
+    	
+    	return !isset($response['error']);
+    }
+    
+    public function unblock($user, array $options = []) {
+    	$options = array_merge([
+    		'reason'	=> null,
+    		'bot'		=> false
+    	], $options);
+    	
+    	$response = $this->request('POST', [
+    		'action'	=> 'unblock',
+    		'user'		=> $user,
+    		'reason'	=> $options['reason'],
+    		'bot'		=> (int) $options['bot'],
+    		'token'		=> $this->getToken('unblock')
+    	]);
+    	
+    	return !isset($response['error']);
+    }
+    
     public function uploadFile($remoteName, $localPath, array $options = []) {
         $options = array_merge([
             'bot' 		=> false,
@@ -160,12 +203,12 @@ class MediaWiki {
     	return false;
     }
     
-    public function getDoubleRedirects($offest = "") {
+    public function listDoubleRedirects($offset = "") {
 		$limit = $this->getUser()->hasRight('bot') ? 5000 : 500;
 		$q = "action=query&list=querypage&qppage=DoubleRedirects&qplimit=$limit";
 
 		if(!empty($offset)) {
-		    $q .= "&qpoffset=".$offset;
+		    $q.= "&qpoffset=".$offset;
 		}
 
 		$response = $this->request('GET', $q);
@@ -174,6 +217,36 @@ class MediaWiki {
 		if(isset($response['query-continue'])) {
 			$offset = $response['query-continue']['querypage']['qpoffset'];
 			$more = $this->getDoubleRedirects($offset);
+		    $pages = array_merge($pages, $more);
+		}
+
+		return $pages;
+    }
+    
+	// https://www.mediawiki.org/wiki/API:Embeddedin
+	public function listEmbeddedIn($title, $ns = null, $offset = "") {
+		if(!is_null($ns) && !is_array($ns)) {
+			$ns = [$ns];
+		}
+		
+		$limit = $this->getUser()->hasRight('bot') ? 5 : 500;
+		$q = "action=query&list=embeddedin&eilimit=$limit";
+		$q.= "&eititle=".urlencode($title);
+		
+		if(!is_null($ns)) {
+			$q.= "&einamespace=".urlencode(implode('|', $ns));
+		}
+
+		if(!empty($offset)) {
+		    $q.= "&eicontinue=".$offset;
+		}
+
+		$response = $this->request('GET', $q);
+		$pages = $response['query']['embeddedin'];
+
+		if(isset($response['query-continue'])) {
+			$offset = $response['query-continue']['embeddedin']['eicontinue'];
+			$more = $this->listEmbeddedIn($title, $ns, $offset);
 		    $pages = array_merge($pages, $more);
 		}
 

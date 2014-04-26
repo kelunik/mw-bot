@@ -9,4 +9,4 @@ $title = $argv[0];
 $wiki->get($title)->protect([
     'edit' => 'sysop',
     'move' => 'sysop'
-], '10 minutes', ['bot' => false]);
+], @$argv[1] ?: '1 week', ['bot' => false]);
