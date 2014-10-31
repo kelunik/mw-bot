@@ -1,0 +1,17 @@
+{
+	"name": "mw-bot",
+    "description": "MediaWiki Bot API",
+	"authors": [
+        {
+            "name": "Niklas Keller",
+            "email": "me@kelunik.com"
+        }
+    ],
+	"minimum-stability": "dev",
+	"require": {
+		"rdlowrey/artax": "dev-master"
+	},
+	"autoload": {
+        "psr-4": { "Bit\\": "src" }
+    }
+}

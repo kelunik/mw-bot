@@ -15,7 +15,7 @@ class User {
         $this->login($username, $password);
         $this->getRights(true);
     }
-	
+
 	// https://www.mediawiki.org/wiki/API:Login
     private function login($username, $password) {
         $data = [
@@ -29,7 +29,7 @@ class User {
         if($response['login']['result'] !== 'NeedToken') {
         	throw new LoginException("Unknown Reason.");
         }
-        
+
         $data['lgtoken'] = $response['login']['token'];
 
         $response = $this->wiki->request('POST', $data);
@@ -42,7 +42,7 @@ class User {
         	case 'Throttled' : throw new LoginException("Too many failed attempts!");
         	case 'Blocked'   : throw new LoginException("Account has been blocked!");
         	default          : throw new LoginException("Unknown reason: $result");
-        }        
+        }
     }
 
     public function getRights($forceupdate = false) {
@@ -70,4 +70,4 @@ class User {
     public function getUsername() {
         return $this->username;
     }
-} 
+}

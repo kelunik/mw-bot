@@ -2,13 +2,14 @@
 
 namespace Bit;
 
-use Artax;
+use Amp\Artax;
 
 class MediaWiki {
     private $http;
     private $url;
     private $user;
     private $token;
+    private $user_agent = 'mw-bot v1.0';
 
     public function __construct(Artax\Client $http, $url) {
         $this->http = $http;
@@ -17,21 +18,21 @@ class MediaWiki {
 
     public function request($method, $data) {
 		$method = strtoupper($method);
-		
+
 		if(is_array($data)) {
 		    $data = array_filter($data, function($v) {
 		        if($v === null || $v === false) {
 		        	return false;
 		        }
-		        
+
 		        return true;
 		    });
-		    
+
 		    if($method === 'GET') {
 		    	$data = http_build_query($data);
 		    }
 		}
-		
+
 		if($method === 'GET') {
 			return $this->getRequest($data);
 		} else if($method === 'POST') {
@@ -42,21 +43,22 @@ class MediaWiki {
 			);
 		}
     }
-    
+
     private function getRequest($data) {
         $request = new Artax\Request;
         $request->setMethod('GET');
+        $request->setHeader('User-Agent', $this->user_agent);
         $request->setUri("{$this->url}?format=php&{$data}");
 
-        $response = $this->http->request($request);
+        $response = $this->http->request($request)->wait();
 
         if($response->getStatus() !== 200) {
         	$status = $response->getStatus();
         	$reason = $response->getReason();
-        	
+
         	throw new RuntimeException("Request failed: {$status} {$reason}");
         }
-        
+
         return unserialize($response->getBody());
     }
 
@@ -69,21 +71,22 @@ class MediaWiki {
 
         $request = new Artax\Request;
         $request->setMethod('POST');
+        $request->setHeader('User-Agent', $this->user_agent);
         $request->setUri("{$this->url}?format=php");
         $request->setBody($body);
-		
-        $response = $this->http->request($request);
+
+        $response = $this->http->request($request)->wait();
 
         if($response->getStatus() !== 200) {
         	$status = $response->getStatus();
         	$reason = $response->getReason();
-        	
+
         	throw new RuntimeException("Request failed: {$status} {$reason}");
         }
-        
+
         return unserialize($response->getBody());
     }
-	
+
 	// https://www.mediawiki.org/wiki/API:Login
     public function login($username, $password) {
     	$this->user = new User($this, $username, $password);
@@ -107,11 +110,11 @@ class MediaWiki {
 
         return $this->token[$key];
     }
-    
+
     public function get($title) {
     	return new Page($title, $this);
     }
-    
+
     public function block($user, $expiry = 'infinite', array $options = []) {
     	$options = array_merge([
     		'anononly'	=> false,
@@ -121,7 +124,7 @@ class MediaWiki {
     		'reason'	=> null,
     		'bot'		=> false
     	], $options);
-    	
+
     	$response = $this->request('POST', [
     		'action'	=> 'block',
     		'user'		=> $user,
@@ -134,16 +137,16 @@ class MediaWiki {
     		'bot'		=> (int) $options['bot'],
     		'token'		=> $this->getToken('block')
     	]);
-    	
+
     	return !isset($response['error']);
     }
-    
+
     public function unblock($user, array $options = []) {
     	$options = array_merge([
     		'reason'	=> null,
     		'bot'		=> false
     	], $options);
-    	
+
     	$response = $this->request('POST', [
     		'action'	=> 'unblock',
     		'user'		=> $user,
@@ -151,25 +154,25 @@ class MediaWiki {
     		'bot'		=> (int) $options['bot'],
     		'token'		=> $this->getToken('unblock')
     	]);
-    	
+
     	return !isset($response['error']);
     }
-    
+
     public function uploadFile($remoteName, $localPath, array $options = []) {
         $options = array_merge([
             'bot' 		=> false,
             'comment' 	=> null,
             'text' 		=> null
         ], $options);
-    	
+
     	if(!file_exists($localPath)) {
     		new \RuntimeException(
     			"the file does not exist: {$localPath}"
     		);
     	}
-    	
+
     	$body = new Artax\FormBody;
-    	
+
     	// add this before the token to ensure that file is sent completely
     	// otherwise it will result in a notoken error
     	$body->addFileField('file', $localPath);
@@ -182,12 +185,12 @@ class MediaWiki {
     		'bot' 				=> (int) $options['bot'],
     		'token' 			=> $this->getToken('edit')
     	]);
-        
+
         $request = (new Artax\Request)
         		->setMethod("POST")
         		->setUri("{$this->url}?format=php")
         		->setBody($body);
-		
+
         $response = $this->http->request($request);
 
         if($response->getStatus() === 200) {
@@ -195,14 +198,14 @@ class MediaWiki {
         } else {
             return false;
         }
-        
+
         if(isset($response['upload']['result']) && $response['upload']['result'] === 'Success') {
         	return true;
     	}
-    	
+
     	return false;
     }
-    
+
     public function listDoubleRedirects($offset = "") {
 		$limit = $this->getUser()->hasRight('bot') ? 5000 : 500;
 		$q = "action=query&list=querypage&qppage=DoubleRedirects&qplimit=$limit";
@@ -222,17 +225,17 @@ class MediaWiki {
 
 		return $pages;
     }
-    
+
 	// https://www.mediawiki.org/wiki/API:Embeddedin
 	public function listEmbeddedIn($title, $ns = null, $offset = "") {
 		if(!is_null($ns) && !is_array($ns)) {
 			$ns = [$ns];
 		}
-		
+
 		$limit = $this->getUser()->hasRight('bot') ? 5 : 500;
 		$q = "action=query&list=embeddedin&eilimit=$limit";
 		$q.= "&eititle=".urlencode($title);
-		
+
 		if(!is_null($ns)) {
 			$q.= "&einamespace=".urlencode(implode('|', $ns));
 		}
@@ -252,4 +255,29 @@ class MediaWiki {
 
 		return $pages;
     }
-} 
+
+    // https://www.mediawiki.org/wiki/API:Allpages
+    public function listAllPages($ns = 0, $prefix = "", $offset = "") {
+        $limit = $this->getUser()->hasRight('bot') ? 50 : 500;
+        $q = "action=query&list=allpages&apnamespace=$ns&aplimit=$limit";
+
+        if(!empty($prefix)) {
+            $q.= "&apprefix=".urlencode($prefix);
+        }
+
+        if(!empty($offset)) {
+            $q.= "&apcontinue=".$offset;
+        }
+
+        $response = $this->request('GET', $q);
+        $pages = $response['query']['allpages'];
+
+        if(isset($response['query-continue'])) {
+            $offset = $response['query-continue']['allpages']['apcontinue'];
+            $more = $this->listAllPages($ns, $prefix, $offset);
+            $pages = array_merge($pages, $more);
+        }
+
+        return $pages;
+    }
+}
